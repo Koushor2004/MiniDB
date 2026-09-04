@@ -48,7 +48,7 @@ public class Table {
         rows.add(row);
     }
 
-    public List<Row> select(String whereColumn, String whereValue) {
+    public List<Row> select(String whereColumn, String operator, String whereValue) {
         if (whereColumn == null) {
             return new ArrayList<>(rows);
         }
@@ -59,14 +59,14 @@ public class Table {
         Object target = column.parseValue(whereValue);
         List<Row> result = new ArrayList<>();
         for (Row row : rows) {
-            if (target.equals(row.get(column.getName()))) {
+            if (evaluateCondition(row.get(column.getName()), operator, target)) {
                 result.add(row);
             }
         }
         return result;
     }
 
-    public int delete(String whereColumn, String whereValue) {
+    public int delete(String whereColumn, String operator, String whereValue) {
         if (whereColumn == null) {
             int count = rows.size();
             rows.clear();
@@ -78,11 +78,11 @@ public class Table {
         }
         Object target = column.parseValue(whereValue);
         int before = rows.size();
-        rows.removeIf(row -> target.equals(row.get(column.getName())));
+        rows.removeIf(row -> evaluateCondition(row.get(column.getName()), operator, target));
         return before - rows.size();
     }
 
-    public int update(String setColumn, String rawSetValue, String whereColumn, String rawWhereValue) {
+    public int update(String setColumn, String rawSetValue, String whereColumn, String operator, String rawWhereValue) {
         Column setCol = getColumn(setColumn);
         if (setCol == null) {
             throw new IllegalArgumentException("No such column: " + setColumn);
@@ -104,12 +104,61 @@ public class Table {
 
         int updatedCount = 0;
         for (Row row : rows) {
-            if (whereTargetValue.equals(row.get(whereCol.getName()))) {
+            if (evaluateCondition(row.get(whereCol.getName()), operator, whereTargetValue)) {
                 row.set(setCol.getName(), newTargetValue);
                 updatedCount++;
             }
         }
         return updatedCount;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean evaluateCondition(Object rowValue, String operator, Object targetValue) {
+        if (operator == null) {
+            operator = "=";
+        }
+        if (rowValue == null || targetValue == null) {
+            if ("=".equals(operator) || "==".equals(operator)) {
+                return rowValue == targetValue;
+            }
+            if ("!=".equals(operator) || "<>".equals(operator)) {
+                return rowValue != targetValue;
+            }
+            return false;
+        }
+
+        if (rowValue instanceof Comparable && targetValue instanceof Comparable) {
+            int cmp = ((Comparable<Object>) rowValue).compareTo(targetValue);
+            switch (operator) {
+                case "=":
+                case "==":
+                    return cmp == 0;
+                case "!=":
+                case "<>":
+                    return cmp != 0;
+                case ">":
+                    return cmp > 0;
+                case "<":
+                    return cmp < 0;
+                case ">=":
+                    return cmp >= 0;
+                case "<=":
+                    return cmp <= 0;
+                default:
+                    throw new IllegalArgumentException("Unsupported operator: " + operator);
+            }
+        }
+
+        switch (operator) {
+            case "=":
+            case "==":
+                return rowValue.equals(targetValue);
+            case "!=":
+            case "<>":
+                return !rowValue.equals(targetValue);
+            default:
+                throw new IllegalArgumentException("Operator '" + operator + "' requires comparable values");
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 package minidb.parser;
 
 import minidb.database.Database;
+import minidb.storage.StorageManager;
 import minidb.table.Column;
 import minidb.table.Row;
 import minidb.table.Table;
@@ -17,11 +18,11 @@ public class Parser {
     private static final Pattern INSERT = Pattern.compile(
             "INSERT INTO (\\w+) VALUES \\((.+)\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern SELECT = Pattern.compile(
-            "SELECT \\* FROM (\\w+)(?: WHERE (\\w+)\\s*=\\s*(.+))?", Pattern.CASE_INSENSITIVE);
+            "SELECT \\* FROM (\\w+)(?: WHERE (\\w+)\\s*(>=|<=|!=|==|<>|>|<|=)\\s*(.+))?", Pattern.CASE_INSENSITIVE);
     private static final Pattern UPDATE = Pattern.compile(
-            "UPDATE (\\w+) SET (\\w+)\\s*=\\s*(.*?)(?: WHERE (\\w+)\\s*=\\s*(.+))?", Pattern.CASE_INSENSITIVE);
+            "UPDATE (\\w+) SET (\\w+)\\s*=\\s*(.*?)(?: WHERE (\\w+)\\s*(>=|<=|!=|==|<>|>|<|=)\\s*(.+))?", Pattern.CASE_INSENSITIVE);
     private static final Pattern DELETE = Pattern.compile(
-            "DELETE FROM (\\w+)(?: WHERE (\\w+)\\s*=\\s*(.+))?", Pattern.CASE_INSENSITIVE);
+            "DELETE FROM (\\w+)(?: WHERE (\\w+)\\s*(>=|<=|!=|==|<>|>|<|=)\\s*(.+))?", Pattern.CASE_INSENSITIVE);
     private static final Pattern DROP_TABLE = Pattern.compile(
             "DROP TABLE (\\w+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern SHOW_TABLES = Pattern.compile(
@@ -53,22 +54,23 @@ public class Parser {
 
         m = SELECT.matcher(command);
         if (m.matches()) {
-            return select(m.group(1), m.group(2), m.group(3));
+            return select(m.group(1), m.group(2), m.group(3), m.group(4));
         }
 
         m = UPDATE.matcher(command);
         if (m.matches()) {
-            return update(m.group(1), m.group(2), m.group(3), m.group(4), m.group(5));
+            return update(m.group(1), m.group(2), m.group(3), m.group(4), m.group(5), m.group(6));
         }
 
         m = DELETE.matcher(command);
         if (m.matches()) {
-            return delete(m.group(1), m.group(2), m.group(3));
+            return delete(m.group(1), m.group(2), m.group(3), m.group(4));
         }
 
         m = DROP_TABLE.matcher(command);
         if (m.matches()) {
             database.dropTable(m.group(1));
+            StorageManager.deleteTableFile(m.group(1), "data");
             return "Table dropped: " + m.group(1);
         }
 
@@ -90,7 +92,8 @@ public class Parser {
             Column.Type type = Column.Type.valueOf(parts[1].toUpperCase());
             columns.add(new Column(parts[0], type));
         }
-        database.createTable(tableName, columns);
+        Table table = database.createTable(tableName, columns);
+        StorageManager.saveTable(table, "data");
         return "Table created: " + tableName;
     }
 
@@ -101,12 +104,13 @@ public class Parser {
             values.add(stripQuotes(value.trim()));
         }
         table.insert(values);
+        StorageManager.saveTable(table, "data");
         return "1 row inserted into " + tableName;
     }
 
-    private String select(String tableName, String whereColumn, String whereValue) {
+    private String select(String tableName, String whereColumn, String operator, String whereValue) {
         Table table = database.getTable(tableName);
-        List<Row> rows = table.select(whereColumn, whereValue == null ? null : stripQuotes(whereValue.trim()));
+        List<Row> rows = table.select(whereColumn, operator, whereValue == null ? null : stripQuotes(whereValue.trim()));
         if (rows.isEmpty()) {
             return "No rows found";
         }
@@ -117,16 +121,22 @@ public class Parser {
         return sb.toString().trim();
     }
 
-    private String update(String tableName, String setColumn, String setValue, String whereColumn, String whereValue) {
+    private String update(String tableName, String setColumn, String setValue, String whereColumn, String operator, String whereValue) {
         Table table = database.getTable(tableName);
         int updated = table.update(setColumn, stripQuotes(setValue.trim()),
-                whereColumn, whereValue == null ? null : stripQuotes(whereValue.trim()));
+                whereColumn, operator, whereValue == null ? null : stripQuotes(whereValue.trim()));
+        if (updated > 0) {
+            StorageManager.saveTable(table, "data");
+        }
         return updated + " row(s) updated in " + tableName;
     }
 
-    private String delete(String tableName, String whereColumn, String whereValue) {
+    private String delete(String tableName, String whereColumn, String operator, String whereValue) {
         Table table = database.getTable(tableName);
-        int deleted = table.delete(whereColumn, whereValue == null ? null : stripQuotes(whereValue.trim()));
+        int deleted = table.delete(whereColumn, operator, whereValue == null ? null : stripQuotes(whereValue.trim()));
+        if (deleted > 0) {
+            StorageManager.saveTable(table, "data");
+        }
         return deleted + " row(s) deleted from " + tableName;
     }
 
