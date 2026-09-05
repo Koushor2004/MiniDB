@@ -67,15 +67,15 @@ java -jar minidb.jar
 Once MiniDB launches, you can test a full database workflow:
 
 ```sql
-minidb> CREATE TABLE students (id INT, name STRING, gpa DOUBLE, active BOOLEAN)
+minidb> CREATE TABLE students (id INT, name STRING, cgpa DOUBLE, active BOOLEAN)
 
-minidb> INSERT INTO students VALUES (1, 'Alice', 3.9, true)
+minidb> INSERT INTO students VALUES (1, 'Koushor', 9.0, true)
 
-minidb> INSERT INTO students VALUES (2, 'Bob', 2.8, false)
+minidb> INSERT INTO students VALUES (2, 'Sayan', 8.8, false)
 
-minidb> SELECT * FROM students WHERE gpa >= 3.0
+minidb> SELECT * FROM students WHERE cgpa >= 9.0
 
-minidb> UPDATE students SET gpa = 4.0 WHERE id = 1
+minidb> UPDATE students SET cgpa = 10.0 WHERE id = 1
 
 minidb> DELETE FROM students WHERE active = false
 
